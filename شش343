@@ -1,0 +1,226 @@
+if _G.DarkCoreLoaded then return end
+ 
+_G.DarkCoreLoaded = true
+ 
+ 
+ 
+local Players = game:GetService("Players")
+ 
+local RunService = game:GetService("RunService")
+ 
+local CoreGui = game:GetService("CoreGui")
+ 
+local LocalPlayer = Players.LocalPlayer
+ 
+local Camera = workspace.CurrentCamera
+ 
+ 
+ 
+-- 1. نظام الكشف (Wallhack)
+ 
+local function makeChams(character)
+ 
+for _, part in ipairs(character:GetChildren()) do
+ 
+if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+ 
+if not part:FindFirstChild("ZoAutoChams") then
+ 
+local adornment = Instance.new("BoxHandleAdornment")
+ 
+adornment.Name = "ZoAutoChams"
+ 
+adornment.Adornee = part
+ 
+adornment.AlwaysOnTop = true
+ 
+adornment.ZIndex = 10
+ 
+adornment.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
+ 
+adornment.Color3 = Color3.fromRGB(255, 0, 0)
+ 
+adornment.Transparency = 0.4
+ 
+adornment.Parent = part
+ 
+end
+ 
+end
+ 
+end
+ 
+end
+ 
+ 
+ 
+local function monitorPlayer(player)
+ 
+if player == LocalPlayer then return end
+ 
+local function setupCharacter(char)
+ 
+char:WaitForChild("HumanoidRootPart", 5)
+ 
+local conn
+ 
+conn = RunService.RenderStepped:Connect(function()
+ 
+if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+ 
+makeChams(char)
+ 
+else
+ 
+if conn then conn:Disconnect() end
+ 
+end
+ 
+end)
+ 
+end
+ 
+if player.Character then task.spawn(function() setupCharacter(player.Character) end) end
+ 
+player.CharacterAdded:Connect(setupCharacter)
+ 
+end
+ 
+ 
+ 
+for _, p in ipairs(Players:GetPlayers()) do monitorPlayer(p) end
+ 
+Players.PlayerAdded:Connect(monitorPlayer)
+ 
+ 
+ 
+-- 2. زر اللمس الخاص بالجوال والمحاكي على الشاشة
+ 
+local ScreenGui = Instance.new("ScreenGui")
+ 
+ScreenGui.Name = "ZoMobileUI"
+ 
+ScreenGui.Parent = CoreGui
+ 
+ 
+ 
+local ToggleBtn = Instance.new("TextButton")
+ 
+ToggleBtn.Size = UDim2.new(0, 130, 0, 50)
+ 
+ToggleBtn.Position = UDim2.new(0.75, 0, 0.15, 0) -- مكان الزر أعلى الشاشة على اليمين
+ 
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+ 
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ 
+ToggleBtn.TextSize = 15
+ 
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ 
+ToggleBtn.Text = "Aimbot: OFF"
+ 
+ToggleBtn.Active = true
+ 
+ToggleBtn.Draggable = true -- يقدر يسحبه ويحركه بأي مكان بالشاشة
+ 
+ToggleBtn.Parent = ScreenGui
+ 
+ 
+ 
+local aimbotEnabled = false
+ 
+ 
+ 
+ToggleBtn.MouseButton1Click:Connect(function()
+ 
+aimbotEnabled = not aimbotEnabled
+ 
+if aimbotEnabled then
+ 
+ToggleBtn.Text = "Aimbot: ON"
+ 
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+ 
+else
+ 
+ToggleBtn.Text = "Aimbot: OFF"
+ 
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+ 
+end
+ 
+end)
+ 
+ 
+ 
+-- 3. تفعيل الأيم بوت التلقائي نحو الرأس عند التشغيل
+ 
+local function getClosestPlayer()
+ 
+local closestPlayer = nil
+ 
+local shortestDistance = math.huge
+ 
+for _, player in ipairs(Players:GetPlayers()) do
+ 
+if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+ 
+local character = player.Character
+ 
+if character:FindFirstChild("Head") then
+ 
+local head = character.Head
+ 
+local vector, onScreen = Camera:WorldToViewportPoint(head.Position)
+ 
+if onScreen then
+ 
+local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+ 
+local mouseDistance = (Vector2.new(vector.X, vector.Y) - screenCenter).Magnitude
+ 
+if mouseDistance < shortestDistance then
+ 
+shortestDistance = mouseDistance
+ 
+closestPlayer = character
+ 
+end
+ 
+end
+ 
+end
+ 
+end
+ 
+end
+ 
+return closestPlayer
+ 
+end
+ 
+ 
+ 
+RunService.RenderStepped:Connect(function()
+ 
+if aimbotEnabled then
+ 
+local target = getClosestPlayer()
+ 
+if target and target:FindFirstChild("Head") then
+ 
+Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Head.Position)
+ 
+end
+ 
+end
+ 
+end)
+ 
+ 
+ 
+print("[+] Zo Core: Touch GUI Edition Loaded Successfully!") 
+ 
+ 
+RAW Paste Data 
