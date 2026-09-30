@@ -1,0 +1,169 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Configuration Settings
+local Settings = {
+    ESP_Enabled = true,
+    BoxColor = Color3.fromRGB(0, 255, 120),
+    TextSize = 14,
+    
+    Aimbot_Enabled = true,
+    AimKey = Enum.UserInputType.MouseButton2, -- زر الماوس الأيمن
+    Smoothness = 0.2, -- نعومة التتبع
+    RequireLOS = false, -- جعلناه false مؤقتاً لضمان عدم حظر الأهداف خلف الحواجز البسيطة
+}
+
+-- متغير لمتابعة حالة الضغط على الزر لضمان عمله في كل الإكسيكيوترات
+local Aiming = false
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Settings.AimKey then
+        Aiming = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Settings.AimKey then
+        Aiming = false
+    end
+end)
+
+-- Table to store ESP drawings
+local EspCache = {}
+
+-- Function to create ESP for players
+local function CreateESP(player)
+    if player == LocalPlayer then return end
+
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Color = Settings.BoxColor
+    box.Thickness = 1
+    box.Filled = false
+
+    local name = Drawing.new("Text")
+    name.Visible = false
+    name.Color = Color3.new(1, 1, 1)
+    name.Size = Settings.TextSize
+    name.Center = true
+    name.Outline = true
+
+    EspCache[player] = {Box = box, Name = name}
+
+    player.CharacterRemoving:Connect(function()
+        box.Visible = false
+        name.Visible = false
+    end)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    CreateESP(p)
+end
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(function(p)
+    if EspCache[p] then
+        EspCache[p].Box:Remove()
+        EspCache[p].Name:Remove()
+        EspCache[p].Box = nil
+        EspCache[p].Name = nil
+        EspCache[p] = nil
+    end
+end)
+
+-- Function to check if target is visible
+local function IsVisible(targetPart, origin)
+    if not Settings.RequireLOS then return true end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, targetPart.Parent}
+    raycastParams.IgnoreWater = true
+
+    local direction = (targetPart.Position - origin)
+    local result = Workspace:Raycast(origin, direction, raycastParams)
+
+    if result == nil then
+        return true
+    end
+    return false
+end
+
+-- Find closest target to crosshair
+local function GetClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = math.huge
+    local mouseLocation = UserInputService:GetMouseLocation()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local targetPart = player.Character:FindFirstChild("Head") or player.Character.HumanoidRootPart
+                
+                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                
+                if onScreen then
+                    if IsVisible(targetPart, Camera.CFrame.Position) then
+                        local magnitude = (Vector2.new(screenPos.X, screenPos.Y) - mouseLocation).Magnitude
+                        if magnitude < shortestDistance then
+                            shortestDistance = magnitude
+                            closestTarget = targetPart
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+-- Main Render Loop
+RunService.RenderStepped:Connect(function()
+    -- 1. تحديث الـ ESP
+    if Settings.ESP_Enabled then
+        for player, cache in pairs(EspCache) do
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+            if hrp and hum and hum.Health > 0 then
+                local vector, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+                if onScreen then
+                    local size = Vector3.new(2, 3, 0) * (Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0)).Y - Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 3, 0)).Y)
+                    local boxSize = Vector2.new(math.abs(size.X), math.abs(size.Y))
+                    local boxPosition = Vector2.new(vector.X - boxSize.X / 2, vector.Y - boxSize.Y / 2)
+
+                    cache.Box.Size = boxSize
+                    cache.Box.Position = boxPosition
+                    cache.Box.Visible = true
+
+                    cache.Name.Text = player.Name .. " [" .. math.floor(hum.Health) .. "]"
+                    cache.Name.Position = Vector2.new(vector.X, boxPosition.Y - 18)
+                    cache.Name.Visible = true
+                else
+                    cache.Box.Visible = false
+                    cache.Name.Visible = false
+                end
+            else
+                cache.Box.Visible = false
+                cache.Name.Visible = false
+            end
+        end
+    end
+
+    -- 2. تشغيل الايم بوت بالطريقة المحدثة للزر
+    if Settings.Aimbot_Enabled and Aiming then
+        local target = GetClosestTarget()
+        if target then
+            local targetCFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, Settings.Smoothness)
+        end
+    end
+end)
